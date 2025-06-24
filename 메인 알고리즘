@@ -1,0 +1,139 @@
+import cv2
+import numpy as np
+
+# 1. 이미지 불러오기
+image = cv2.imread('C:\\images\\beef_images\\(1) 1++\\071313_@.jpg')
+
+
+# 2. 전처리
+# 원본 이미지를 그레이스케일로 변환
+gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+#gray = cv2.GaussianBlur(gray, (5, 5), 0)
+
+# Canny 에지 검출
+# threshold : 전역 임계값을 사용하여 이진화 수행
+# -> 전역 대비 강화 효과 : 전체 이미지의 밝기 차이가 강조되서 이미지 전반적인 대비가 향상됨.
+# -> 객체와 배경의 대비를 강조하는 효과
+edge = cv2.Canny(gray, 100, 100)
+_, thresh = cv2.threshold(gray, 135, 255, cv2.THRESH_BINARY)
+# adaptive_threshold = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+
+# erode : 흰색 영역을 줄이거나 검은색 영역을 확장하는 연산
+# dilate : erode가 적용된 이미지에 대해 흰색 영역을 늘리거나 검은색 영역을 축소하는 연산
+# 아래 과정을 번갈아가며 적용하는 과정 = Opening
+# -> 작은 노이즈를 제거하고 객체의 경계를 부드럽게 만드는 데 사용
+# -> 아래 과정이 있기에 가우시안 블러는 적용하지 않았음.
+# 가우시안 블러 : Canny 에지 전 노이즈 제거하는 단계
+thresh = cv2.erode(thresh, None, iterations=2)
+tresh = cv2.dilate(thresh, None, iterations=2)
+
+
+# 3. 컨투어(외곽선) 찾기
+contours_found, hierarchy = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+# 4. 컨투어 면적 큰 순으로 정렬 (내림차순)
+contours_layer = sorted(contours_found, key=cv2.contourArea, reverse=True)
+
+# 가장 큰 컨투어 선택
+largest_contour = contours_layer[0]
+
+# 5. 배경과 객체를 분리하기
+# 검은 배경 생성
+mask_img = np.zeros_like(gray)
+
+# 가장 큰 컨투어 흰색으로 채우기
+cv2.drawContours(mask_img, [largest_contour], -1, (255), thickness=cv2.FILLED)
+
+# 객체가 있는 원본 이미지에서 가장 큰 컨투어 영역을 제외한 부분 따오기
+background_img = cv2.bitwise_and(image, image, mask=~mask_img)
+
+# 6. 배경 이미지 그레이스케일 및 이진화
+# 그레이스케일
+gray_background = cv2.cvtColor(background_img, cv2.COLOR_BGR2GRAY)
+
+# 이진화
+_, binary_background = cv2.threshold(gray_background, 110, 255, cv2.THRESH_BINARY)
+
+# 7. 흰색 부분(이진화된 이미지에서 값이 1인 부분)의 비율 계산
+# countNonZero : 이진화된 이미지에서 값이 1인 픽셀 수 계산
+total_pixels = binary_background.size
+white_pixels = cv2.countNonZero(binary_background)
+white_ratio = white_pixels / total_pixels
+
+white_ratio_fin = white_ratio * 100
+
+# 8. 마블링 결정
+if white_ratio_fin > 19 :
+    marbling = "9"
+elif white_ratio_fin >= 18.9 :
+    marbling = "8"
+elif 17 <= white_ratio_fin < 18.9 :
+    marbling = "8"
+elif white_ratio_fin >= 16.9 :
+    marbling = "7"
+elif 15.6 <= white_ratio_fin < 16.9 :
+    marbling = "7"
+elif white_ratio_fin >= 15.5 :
+    marbling = "6"
+elif 12.3 <= white_ratio_fin < 15.5 :
+    marbling = "6"
+elif white_ratio_fin >= 12.2 :
+    marbling = "5"
+elif 11 <= white_ratio_fin < 12.2 :
+    marbling = "5"
+elif white_ratio_fin >= 10.9 :
+    marbling = "4"
+elif 9 <= white_ratio_fin < 10.9 :
+    marbling = "4"
+elif white_ratio_fin >= 8.9 :
+    marbling = "3"
+elif 7 <= white_ratio_fin < 8.9 :
+    marbling = "3"
+elif white_ratio_fin >= 6.9 :
+    marbling = "2"
+elif 5 <= white_ratio_fin < 6.9 :
+    marbling = "2"
+elif white_ratio_fin >= 4.9 :
+    marbling = "1"
+elif 1 <= white_ratio_fin < 4.9 :
+    marbling = "1"
+else:
+    marbling = "등급 산정 불가능"
+
+
+# 9. 등급 결정
+if white_ratio_fin > 15.6 :
+    level = "1++"
+elif white_ratio_fin >= 15.5 :
+    level = "1+"
+elif 12.3 < white_ratio_fin < 15.5 :
+    level = "1+"
+elif white_ratio_fin >= 12.2 :
+    level = "1"
+elif 9 < white_ratio_fin < 12.2 :
+    level = "1"
+elif white_ratio_fin >= 8.9 :
+    level = "2"
+elif 5 < white_ratio_fin < 8.9 :
+    level = "2"
+elif white_ratio_fin >= 4.9 :
+    level = "3" 
+elif 1 < white_ratio_fin < 4.9 :
+    level = "3"
+else:
+    level = "등급 산정 불가능"
+
+
+# 10. 결과 출력
+print('전체 픽셀 수 :', total_pixels)
+print('흰색 픽셀 수 :', white_pixels)
+print('흰색 부분의 비율 : {:.1f}%'.format(white_ratio * 100))
+print('마블링 :', marbling)
+print('등급 :', level)
+
+# 이미지 보여주기
+cv2.imshow('Background image', background_img)
+cv2.imshow('Binary background', binary_background)
+
+cv2.waitKey()
+cv2.destroyAllWindows()
